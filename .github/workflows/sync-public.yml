@@ -1,0 +1,57 @@
+name: Sync public website text
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/sync_site.py'
+      - '.github/workflows/sync-public.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-site-text
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Fetch and validate published public pages
+        run: python3 scripts/sync_site.py
+      - name: Document schedule and monthly health check
+        run: |
+          cat > SYNC.md <<EOF
+          # Automatic public text mirror
+
+          Source: https://abrnivar.ir/ and same-domain public pages in its sitemap.
+          Checks run every 15 minutes (GitHub scheduling may be delayed).
+          Manual run: Actions > Sync public website text > Run workflow.
+          Edit the main website; README.md and pages/*.md are generated.
+          No private repository, SMTP credential or form submission is read.
+          On download or validation failure, existing published content is preserved.
+          Failures appear in the Actions tab and GitHub's normal notification settings.
+          This mirror does not guarantee ChatGPT Search indexing or ranking.
+          Monthly health commit avoids a long-inactive public repository schedule.
+
+          Last successful check month (UTC): $(date -u +%Y-%m)
+          EOF
+      - name: Commit only changed public text
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- README.md pages/ SYNC.md
+          if git diff --cached --quiet; then
+            echo 'Public text unchanged.'
+          else
+            git commit -m 'Sync published abrnivar.ir public text'
+            git push origin HEAD:main
+          fi
